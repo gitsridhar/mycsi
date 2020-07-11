@@ -56,7 +56,7 @@ func NewNodeServer(d *MyCSIDriver) *NodeServer {
         }
 }
 
-func (driver *PowerVCCSIDriver) InitializeDriver(name, vendorVersion, nodeID string) error {
+func (driver *MyCSIDriver) InitializeDriver(name, vendorVersion, nodeID string) error {
         glog.V(3).Infof("mycsi: InitializeDriver. name: %s, version: %v, nodeID: %s", name, vendorVersion, nodeID)
         if name == "" {
                 return fmt.Errorf("Driver name missing")
