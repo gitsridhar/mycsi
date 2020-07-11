@@ -12,6 +12,7 @@ before_install:
   - sudo rm -f /var/lib/dpkg/lock
   - sudo apt-get -qq update
   - sudo apt-get install sshpass -y
+  - curl https://glide.sh/get | sh
   - echo $TRAVIS_OS_NAME
   - echo $ARCH
 # Install all of the dependencies referenced in the glide.yaml file
