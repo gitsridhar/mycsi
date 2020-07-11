@@ -1,0 +1,31 @@
+language: go
+
+go:
+  - "1.13.x"
+
+sudo: true
+
+servics:
+  - docker
+
+before_install:
+  - sudo rm -f /var/lib/dpkg/lock
+  - sudo apt-get -qq update
+  - sudo apt-get install sshpass -y
+  - echo $TRAVIS_OS_NAME
+  - echo $ARCH
+# Install all of the dependencies referenced in the glide.yaml file
+  - glide cc && glide install -v
+
+before_script:
+  # We need to login to docker up-front but only do it if we truly want to publish the images and is a release branch
+  #- if [[ "$PUBLISH_DOCKER_IMAGES" == "yes" ]] && [[ "$TRAVIS_BRANCH" == "v"*"."*"."* ]] ; then
+  - make docker-login
+  #  fi
+
+script:
+  # We want to both build the binaries for the golang program
+  - make push-image
+
+after_success:
+  # Determine if this is a personal branch or the master/v1.0.0 branch and publish differently
