@@ -196,6 +196,10 @@ func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolume
         return nil, status.Error(codes.Unimplemented, "")
 }
 
+func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
 func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 
         volumeID := req.GetVolumeId()
