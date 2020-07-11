@@ -5,7 +5,6 @@ import (
         "fmt"
         "os"
         "sync"
-        "strings"
         "time"
 
         "github.com/golang/glog"
@@ -87,7 +86,7 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
         glog.V(3).Infof("nodeserver NodeStageVolume Required Filesystem Type : %s", fsType)
 
         var pID = os.Getpid()
-        lock, err := lockfile.New(filepath.Join(os.TempDir(), resources.ScsiScanLock))
+        lock, err := lockfile.New(filepath.Join(os.TempDir(), "my-scsiscan.lck"))
         if err != nil {
                 return nil, status.Error(codes.InvalidArgument, (fmt.Sprintf("%d : Cannot init lock. Reason. %v", pID, err)))
         }
