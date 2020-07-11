@@ -3,9 +3,7 @@ package main
 import (
         "flag"
         "math/rand"
-        "io/ioutil"
         "os"
-        "fmt"
         "time"
         "github.com/golang/glog"
 
