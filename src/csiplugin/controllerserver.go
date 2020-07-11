@@ -147,17 +147,17 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	volumeType := parameters["type"]
 	availabilityZone := parameters["availability"]
         fsType := parameters["fstype"]
-        multiAttach = false
+	multiAttach := false
 
         for _, reqCap := range reqCapabilities {
                 if reqCap.GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-                        volumeopts.MultiAttach = true
+                        multiAttach = true
                 }
                 if reqCap.GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER {
-                        volumeopts.MultiAttach = true
+                        multiAttach = true
                 }
                 if reqCap.GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER {
-                        volumeopts.MultiAttach = true
+                        multiAttach = true
                 }
         }
 
