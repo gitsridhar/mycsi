@@ -91,7 +91,7 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
                 return nil, status.Error(codes.InvalidArgument, (fmt.Sprintf("%d : Cannot init lock. Reason. %v", pID, err)))
         }
         
-        for i := 0; i < resources.MaxAttemptsToTryLock; i++ {
+        for i := 0; i < 30; i++ {
                 err = lock.TryLock()
                 if err == nil {
                         break
