@@ -1,0 +1,701 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: my-csi
+annotations:
+    openshift.io/display-name: "My CSI Driver"
+    openshift.io/documentation-url: "http://www.sridcloud.com"
+    openshift.io/long-description: "This is a sample CSI driver implementation"
+    openshift.io/provider-display-name: "Sridhar"
+    openshift.io/support-url: "http://www.sridcloud.com"
+    description: "This is a sample CSI driver implementation"
+    tags: "Storage"
+    iconClass: "icon"
+message: "This is a sample CSI driver implementation"
+objects:
+- kind: ConfigMap
+  apiVersion: v1
+  metadata:
+    name: my-config
+    labels:
+      app: my-csi
+      chart: my-csi-1.0.0
+  data:
+     ENV1: "one"
+
+- kind: StorageClass
+  apiVersion: storage.k8s.io/v1
+  metadata:
+    name: my-csi-volume-default
+    annotations:
+      storageclass.kubernetes.io/is-default-class: "${DRIVER_DFLT_STG_CLASS}"
+  parameters:
+    csi.storage.k8s.io/fstype: "ext4"
+  provisioner: my-csi
+  allowVolumeExpansion: true
+- kind: ServiceAccount
+  apiVersion: v1
+  metadata:
+    name: my-csi-attacher
+    namespace: kube-system
+    labels:
+      product: my-csi
+- kind: ServiceAccount
+  apiVersion: v1
+  metadata:
+    name: my-csi-resizer
+    namespace: kube-system
+    labels:
+      product: my-csi
+- kind: ClusterRole
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-attacher
+    labels:
+      product: my-csi
+  rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["get", "list", "watch", "update"]
+    - apiGroups: [""]
+      resources: ["persistentvolumes"]
+      verbs: ["get", "list", "watch", "update"]
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["csinodes"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["volumeattachments"]
+      verbs: ["get", "list", "watch", "update"]
+- kind: ClusterRole
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-resizer
+    labels:
+      product: my-csi
+  rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["get", "list", "watch", "update"]
+    - apiGroups: [""]
+      resources: ["persistentvolumes"]
+      verbs: ["get", "list", "watch", "update"]
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["csinodes"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["volumeattachments"]
+      verbs: ["get", "list", "watch", "update"]
+- kind: ClusterRoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-attacher-role
+    labels:
+      product: my-csi
+  subjects:
+    - kind: ServiceAccount
+      name: my-csi-attacher
+      namespace: kube-system
+  roleRef:
+    kind: ClusterRole
+    name: my-csi-attacher
+    apiGroup: rbac.authorization.k8s.io
+- kind: ClusterRoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-resizer-role
+    labels:
+      product: my-csi
+  subjects:
+    - kind: ServiceAccount
+      name: my-csi-resizer
+      namespace: kube-system
+  roleRef:
+    kind: ClusterRole
+    name: my-csi-resizer
+    apiGroup: rbac.authorization.k8s.io
+# needed for StatefulSet
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: my-csi-attacher-plugin
+    labels:
+      app: my-csi
+  spec:
+    selector:
+      app: my-csi
+    ports:
+      - name: dummy
+        port: 12345
+- kind: StatefulSet
+  apiVersion: apps/v1
+  metadata:
+    name: my-csi-attacher-plugin
+    namespace: kube-system
+    labels:
+      product: my-csi
+      app: my-csi
+      chart: my-csi-1.0.0
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: my-csi
+    serviceName: "my-csi-attacher-plugin"
+    template:
+      metadata:
+        labels:
+          app: my-csi
+          product: my-csi
+          chart: my-csi-1.1.0
+      spec:
+        serviceAccount: my-csi-attacher
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: beta.kubernetes.io/arch
+                  operator: In
+                  values:
+                  - ppc64le
+                  - amd64
+        serviceAccountName: ${SECURITY_SERVICE_ACCOUNT_NAME}
+        imagePullSecrets:
+          - name: ${QUAY_SECRET_NAME}
+        containers:
+          - name: csi-attacher
+            image: quay.io/k8scsi/csi-attacher:v3.0.0-rc1
+            imagePullPolicy: "IfNotPresent"
+            args:
+              - --csi-address=$(ADDRESS)
+              - --v=5
+            env:
+              - name: ADDRESS
+                value: /csi/csi.sock
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+          - name: liveness-probe
+            image: quay.io/k8scsi/livenessprobe:v1.1.0
+            args:
+              - --csi-address=/csi/csi.sock
+              - --connection-timeout=3s   # TODO this line is deprecated from v1.1.0. So if exist its ignore it.
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+          - name: my-csi-attacher
+            image: ${IMAGE_REPO}:${IMAGE_TAG}
+            imagePullPolicy: ${IMAGE_PROVISIONER_PULL}
+            args:
+              - --v=5
+              - --csi-address=$(ADDRESS)
+            env:
+              - name: ADDRESS
+                value: unix:///csi/csi.sock
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+            ports:
+              - containerPort: 9808
+                name: healthz
+                protocol: TCP
+            livenessProbe:
+              failureThreshold: 5
+              httpGet:
+                path: /healthz
+                port: healthz
+              initialDelaySeconds: 10
+              timeoutSeconds: 3
+              periodSeconds: 2
+            securityContext:
+              capabilities:
+                drop:
+                - all
+                add: []
+              allowPrivilegeEscalation: true
+              readOnlyRootFilesystem: false
+              runAsNonRoot: false
+              privileged: true
+        volumes:
+          - name: socket-dir
+            hostPath:
+              path: /var/lib/kubelet/plugins/my-csi
+              type: DirectoryOrCreate
+- kind: StatefulSet
+  apiVersion: apps/v1
+  metadata:
+    name: my-csi-resizer-plugin
+    namespace: kube-system
+    labels:
+      product: my-csi
+      app: my-csi
+      chart: my-csi-1.0.0
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: my-csi
+    serviceName: "my-csi-resizer-plugin"
+    template:
+      metadata:
+        labels:
+          app: my-csi
+          product: my-csi
+          chart: my-csi-1.1.0
+      spec:
+        serviceAccount: my-csi-resizer
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: beta.kubernetes.io/arch
+                  operator: In
+                  values:
+                  - ppc64le
+                  - amd64
+        serviceAccountName: ${SECURITY_SERVICE_ACCOUNT_NAME}
+        imagePullSecrets:
+          - name: ${QUAY_SECRET_NAME}
+        containers:
+          - name: csi-resizer
+            image: quay.io/k8scsi/csi-resizer:v0.5.0
+            imagePullPolicy: "IfNotPresent"
+            args:
+              - --csi-address=$(ADDRESS)
+              - --v=5
+            env:
+              - name: ADDRESS
+                value: /csi/csi.sock
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+          - name: liveness-probe
+            image: quay.io/k8scsi/livenessprobe:v1.1.0
+            args:
+              - --csi-address=/csi/csi.sock
+              - --connection-timeout=3s   # TODO this line is deprecated from v1.1.0. So if exist its ignore it.
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+          - name: my-csi-resizer
+            image: ${IMAGE_REPO}:${IMAGE_TAG}
+            imagePullPolicy: ${IMAGE_PROVISIONER_PULL}
+            args:
+              - --v=5
+              - --csi-address=$(ADDRESS)
+            env:
+              - name: ADDRESS
+                value: unix:///csi/csi.sock
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+            ports:
+              - containerPort: 9808
+                name: healthz
+                protocol: TCP
+            livenessProbe:
+              failureThreshold: 5
+              httpGet:
+                path: /healthz
+                port: healthz
+              initialDelaySeconds: 10
+              timeoutSeconds: 3
+              periodSeconds: 2
+            securityContext:
+              capabilities:
+                drop:
+                - all
+                add: []
+              allowPrivilegeEscalation: true
+              readOnlyRootFilesystem: false
+              runAsNonRoot: false
+              privileged: true
+        volumes:
+          - name: socket-dir
+            hostPath:
+              path: /var/lib/kubelet/plugins/my-csi
+              type: DirectoryOrCreate
+- kind: ServiceAccount
+  apiVersion: v1
+  metadata:
+    name: my-csi-provisioner
+    namespace: kube-system
+    lebels:
+      product: my-csi
+- kind: ClusterRole
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-provisioner
+    labels:
+      product: my-csi
+  rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["persistentvolumes"]
+      verbs: ["get", "list", "watch", "create", "delete"]
+    - apiGroups: [""]
+      resources: ["persistentvolumeclaims"]
+      verbs: ["get", "list", "watch", "update"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["csinodes"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["storageclasses"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["list", "watch", "create", "update", "patch"]
+- kind: ClusterRoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-provisioner-role
+    lebels:
+      product: my-csi
+  subjects:
+    - kind: ServiceAccount
+      name: my-csi-provisioner
+      namespace: kube-system
+  roleRef:
+    kind: ClusterRole
+    name: my-csi-provisioner
+    apiGroup: rbac.authorization.k8s.io
+# needed for StatefulSet
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: my-csi-provisioner-plugin
+    labels:
+      app: my-csi
+  spec:
+    selector:
+      app: my-csi
+    ports:
+      - name: dummy
+        port: 12345
+- kind: StatefulSet
+  apiVersion: apps/v1
+  metadata:
+    name: my-csi-provisioner-plugin
+    namespace: kube-system
+    labels:
+      product: my-csi
+      app: my-csi
+      chart: my-csi-1.1.0
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: my-csi
+    serviceName: "my-csi-provisioner-plugin"
+    template:
+      metadata:
+        labels:
+          app: my-csi
+          product: my-csi
+          chart: my-csi-1.1.0
+      spec:
+        serviceAccount: my-csi-provisioner
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: beta.kubernetes.io/arch
+                  operator: In
+                  values:
+                  - ppc64le
+                  - amd64
+        serviceAccountName: ${SECURITY_SERVICE_ACCOUNT_NAME}
+        imagePullSecrets:
+          - name: ${QUAY_SECRET_NAME}
+        containers:
+          - name: csi-provisioner
+            image: quay.io/k8scsi/csi-provisioner:v2.0.0-rc2
+            imagePullPolicy: "IfNotPresent"
+            args:
+              - --csi-address=$(ADDRESS)
+              - --v=5
+            env:
+              - name: ADDRESS
+                value: /csi/csi.sock
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+          - name: liveness-probe
+            image: quay.io/k8scsi/livenessprobe:v1.1.0
+            args:
+              - --csi-address=/csi/csi.sock
+              - --connection-timeout=3s   # TODO this line is deprecated from v1.1.0. So if exist its ignore it.
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+          - name: my-csi-provisioner
+            image: ${IMAGE_REPO}:${IMAGE_TAG}
+            imagePullPolicy: ${IMAGE_PROVISIONER_PULL}
+            args:
+              - --csi-address=$(ADDRESS)
+              - --v=5
+            env:
+              - name: ADDRESS
+                value: unix:///csi/csi.sock
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+            securityContext:
+              capabilities:
+                drop:
+                - all
+                add: []
+              allowPrivilegeEscalation: true
+              readOnlyRootFilesystem: false
+              runAsNonRoot: false
+              privileged: true
+        volumes:
+          - name: socket-dir
+            hostPath:
+              path: /var/lib/kubelet/plugins/my-csi
+              type: DirectoryOrCreate
+- kind: ServiceAccount
+  apiVersion: v1
+  metadata:
+    name: my-csi-node
+    namespace: kube-system
+    labels:
+      product: my-csi
+- kind: ClusterRole
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-node
+    labels:
+      product: my-csi
+  rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list", "update"]
+    - apiGroups: [""]
+      resources: ["namespaces"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["persistentvolumes"]
+      verbs: ["get", "list", "watch", "update"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["csinodes"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["volumeattachments"]
+      verbs: ["get", "list", "watch", "update"]
+- kind: ClusterRoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: my-csi-node-role
+    labels:
+      product: my-csi
+  subjects:
+    - kind: ServiceAccount
+      name: my-csi-node
+      namespace: kube-system
+  roleRef:
+    kind: ClusterRole
+    name: my-csi-node
+    apiGroup: rbac.authorization.k8s.io
+- kind: DaemonSet
+  apiVersion: apps/v1
+  metadata:
+    name: my-csi-plugin
+    namespace: kube-system
+    labels:
+      product: my-csi
+  spec:
+    selector:
+      matchLabels:
+        app: my-csi
+    template:
+      metadata:
+        labels:
+          app: my-csi
+          product: my-csi
+      spec:
+        serviceAccount: my-csi-node
+        #hostNetwork: true
+        imagePullSecrets:
+          - name: ${QUAY_SECRET_NAME}
+        containers:
+          - name: node-driver-registrar
+            image: quay.io/k8scsi/csi-node-driver-registrar:v1.3.0
+            imagePullPolicy: "IfNotPresent"
+            args:
+              - --csi-address=/csi/csi.sock
+              - --kubelet-registration-path=/var/lib/kubelet/plugins/my-csi/csi.sock
+              - --v=5
+            securityContext:
+              privileged: true
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sh", "-c", "rm -rf /registration/my-csi /registration/my-csi-reg.sock"]
+            env:
+              - name: KUBE_NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: spec.nodeName
+            volumeMounts:
+              - name: registration-dir
+                mountPath: /registration
+              - name: socket-dir
+                mountPath: /csi
+          - name: liveness-probe
+            image: quay.io/k8scsi/livenessprobe:v1.1.0
+            args:
+              - --csi-address=/csi/csi.sock
+              - --health-port=9808
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+          - name: my-csi
+            securityContext:
+              privileged: true
+              capabilities:
+                drop:
+                - all
+                add: []
+              allowPrivilegeEscalation: true
+              readOnlyRootFilesystem: false
+              runAsUser: 0
+            image: ${IMAGE_REPO}:${IMAGE_TAG}
+            imagePullPolicy: ${IMAGE_PROVISIONER_PULL}
+            args:
+              - --nodeid=$(NODE_ID)
+              - --csi-address=$(CSI_ENDPOINT)
+              - --v=5
+              - --drivername=my-csi
+            env:
+              - name: NODE_ID
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: spec.nodeName
+              - name: CSI_ENDPOINT
+                value: unix:///csi/csi.sock
+            volumeMounts:
+              - name: socket-dir
+                mountPath: /csi
+              - name: mountpoint-dir
+                mountPath: /var/lib/kubelet/pods
+                mountPropagation: Bidirectional
+              - name: plugin-dir
+                mountPath: /var/lib/kubelet/plugins
+                mountPropagation: Bidirectional
+              - name: sys-dir
+                mountPath: /sys
+              - name: dev-dir
+                mountPath: /dev
+              - name: sbin-dir
+                mountPath: /usr/sbin
+              - name: bin-dir
+                mountPath: /usr/bin
+              - name: ulib-dir
+                mountPath: /usr/lib64
+            ports:
+              - name: healthz
+                containerPort: 9808
+                protocol: TCP
+            livenessProbe:
+              httpGet:
+                path: /healthz
+                port: healthz
+              initialDelaySeconds: 10
+              timeoutSeconds: 3
+              periodSeconds: 110
+              failureThreshold: 5
+        volumes:
+          - name: socket-dir
+            hostPath:
+              path: /var/lib/kubelet/plugins/my-csi
+              type: DirectoryOrCreate
+          - name: mountpoint-dir
+            hostPath:
+              path: /var/lib/kubelet/pods
+              type: DirectoryOrCreate
+          - name: plugin-dir
+            hostPath:
+              path: /var/lib/kubelet/plugins
+              type: DirectoryOrCreate
+          - name: registration-dir
+            hostPath:
+              path: /var/lib/kubelet/plugins_registry
+              type: DirectoryOrCreate
+          - name: sys-dir
+            hostPath:
+              path: /sys
+              type: Directory
+          - name: dev-dir
+            hostPath:
+              path: /dev
+              type: Directory
+          - name: sbin-dir
+            hostPath:
+              path: /usr/sbin
+              type: Directory
+          - name: bin-dir
+            hostPath:
+              path: /usr/bin
+              type: Directory
+          - name: ulib-dir
+            hostPath:
+              path: /usr/lib64/
+              type: Directory
+- apiVersion: storage.k8s.io/v1beta1
+  kind: CSIDriver
+  metadata:
+    name: my-csi
+  spec:
+    attachRequired: true
+    podInfoOnMount: false
+parameters:
+- name: QUAY_SECRET_NAME
+  displayName: "Quay.io access secretname"
+  description: "Name of the pre-created Secret object that contains the credentials to access quay.io."
+- name: DRIVER_DFLT_STG_CLASS
+  displayName: "Make this the default storage class"
+  description: "The default storage class is used if no storage class is specified when creating a persistent volume claim."
+  value: "true"
+  required: true
+- name: IMAGE_REPO
+  displayName: "Provisioner image repository"
+  description: "Name and location of the provisioner docker image repository."
+  value: "svenkatdock/my-csi-driver"
+  required: true
+- name: IMAGE_TAG
+  displayName: "Provisioner image tag"
+  description: "Tag or label for the provisioner docker image. The default value is the only supported version."
+  value: "1.0.0"
+  required: true
+- name: IMAGE_PROVISIONER_PULL
+  displayName: "Provisioner image pull policy"
+  description: "Pull policy for the provisioner docker image."
+  value: "IfNotPresent"
+  required: true
+- name: SECURITY_SERVICE_ACCOUNT_NAME
+  displayName: "Service account name"
+  description: "Name of the service account to use"
+  value: "default"
+  required: true
