@@ -28,7 +28,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
                 return nil, status.Error(codes.InvalidArgument, "VolumeID is not present")
         }
 
-        newSize := int(req.GetCapacityRange().GetRequiredBytes() / GiB)
+        // newSize := int(req.GetCapacityRange().GetRequiredBytes() / GiB)
         
         // Perform Actual Volume Expansion using your API
 
@@ -142,11 +142,11 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
         parameters := req.GetParameters()
 
-	name := volName
-	sizeize := int(volSize)
-	volumeType := parameters["type"]
-	availabilityZone := parameters["availability"]
-        fsType := parameters["fstype"]
+	// name := volName
+	// sizeize := int(volSize)
+	// volumeType := parameters["type"]
+	// availabilityZone := parameters["availability"]
+        // fsType := parameters["fstype"]
 	multiAttach := false
 
         for _, reqCap := range reqCapabilities {
@@ -160,6 +160,8 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
                         multiAttach = true
                 }
         }
+	
+	multiAttach = false
 
         // Perform Volume create using the characteristics defined above. Ensure you collect a unique ID of the volume.
         ID := "volume id collected"
