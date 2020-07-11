@@ -21,7 +21,7 @@ oc delete serviceaccount my-csi-provisioner
 oc delete serviceaccount my-csi-attacher
 oc delete serviceaccount my-csi-resizer
 
-oc delete storageclass imy-csi-volume-default
+oc delete storageclass my-csi-volume-default
 oc delete configmap my-config
 oc delete csidriver my-csi
 
