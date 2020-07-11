@@ -144,7 +144,7 @@ func (ns *NodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
                 return nil, status.Error(codes.InvalidArgument, "VolumeID is not present")
         }
 
-        newSize := int(req.GetCapacityRange().GetRequiredBytes() / GiB)
+        // newSize := int(req.GetCapacityRange().GetRequiredBytes() / GiB)
 
         return &csi.NodeExpandVolumeResponse{
         }, nil
