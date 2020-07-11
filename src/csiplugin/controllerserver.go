@@ -142,13 +142,12 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
         parameters := req.GetParameters()
 
-        volumeopts := volume.VolumeCreateOpts{}
-        volumeopts.Name = volName
-        volumeopts.Size = int(volSize)
-        volumeopts.VolumeType = parameters["type"]
-        volumeopts.AvailabilityZone = parameters["availability"]
+	name := volName
+	sizeize := int(volSize)
+	volumeType := parameters["type"]
+	availabilityZone := parameters["availability"]
         fsType := parameters["fstype"]
-        volumeopts.MultiAttach = false
+        multiAttach = false
 
         for _, reqCap := range reqCapabilities {
                 if reqCap.GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
