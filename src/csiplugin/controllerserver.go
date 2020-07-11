@@ -147,8 +147,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// volumeType := parameters["type"]
 	// availabilityZone := parameters["availability"]
         // fsType := parameters["fstype"]
-	multiAttach := false
+	// multiAttach := false
 
+	/*
         for _, reqCap := range reqCapabilities {
                 if reqCap.GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
                         multiAttach = true
@@ -161,7 +162,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
                 }
         }
 	
-	multiAttach = false
+	*/
 
         // Perform Volume create using the characteristics defined above. Ensure you collect a unique ID of the volume.
         ID := "volume id collected"
