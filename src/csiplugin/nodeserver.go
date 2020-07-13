@@ -44,6 +44,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
                 return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Volume Capability must be provided")
         }
 
+        // Perform the following:
+        // Create directory targetPath
+        // mount --bind -r stagingTargetPath targetPath
+
         return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -60,6 +64,9 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
         if len(targetPath) == 0 {
                 return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Staging Target Path must be provided")
         }
+        
+        // Perform the following:
+        // unmount targetPath
 
         return &csi.NodeUnpublishVolumeResponse{}, nil
 }
@@ -102,6 +109,12 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
         glog.V(3).Infof("%d : Got hold of Scsiscan lock", pID)
         
         defer lock.Unlock()
+        
+        // Perform the following:
+        // Find where the attached volume exist on the worker node. Call it volDevicePath.
+        // See if volDevicePath has any file system created on it. If not, Do mkfsX on volDevicePath with fsType
+        // Create a directory stagingTargetPath
+        // mount volDevicePath stagingTargetPath
 
         return &csi.NodeStageVolumeResponse{}, nil
 }
@@ -119,6 +132,23 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
         if len(stagingTargetPath) == 0 {
                 return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Staging Target Path must be provided")
         }
+        
+        // Perform the following:
+        // Get the 'device mounted path' for stagingTargetPath:
+        //    1. run mount -w and grep for stagingTargetPath
+        //    2. first field in the output is 'device mounted path'
+        // Get all blockdevices of the 'device mounted path':
+        //    1. if device mounted path is /dev/mapper/mpath then:
+        //        a. multipath -l 'device mounted path'
+        //        b. get parent device from output
+        //        c. get slave device for parent device: 
+        //           1. split parent device into sub strings with '/' as separator.
+        //           2. if number of fields is not 3 or second field has no 'dev' as prefix, return empty list as blockdevices.
+        //           3. else get third field from split, look for /sys/block/<third field>/slaves/, read it as directory and return files under the direcotry as blockdevices
+        //    2. if 'device mounted path' is not a multipath, return 'device mounted path' as block devices list of size 1.
+        // unmount stagingTargetPath
+        // Delete all blockdevices
+        // If applicable, remove all multiple path devices for 'device mounted path'
 
         return &csi.NodeUnstageVolumeResponse{}, nil
 }
